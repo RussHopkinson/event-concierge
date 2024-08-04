@@ -8,6 +8,80 @@ from dotenv import load_dotenv
 import requests
 import openai
 
+# Load environment variables from .env file
+load_dotenv()
+
+# Load configuration from JSON file
+with open('config.json', 'r') as f:
+    config = json.load(f)
+
+# Extract API keys and default values, using environment variables if available
+eventbrite_api_key = os.getenv("EVENTBRITE_API_KEY", config.get("eventbrite_api_key"))
+openai_api_key = os.getenv("OPENAI_API_KEY", config.get("openai_api_key"))
+location = os.getenv("DEFAULT_LOCATION", config.get("default_location"))
+interests = os.getenv("DEFAULT_INTERESTS", config.get("default_interests")).split(',')
+
+def get_events_from_eventbrite(location: str, interests: list) -> list:
+    url = "https://www.eventbriteapi.com/v3/events/search/"
+    headers = {
+        "Authorization": f"Bearer {eventbrite_api_key}",
+    }
+    params = {
+        "q": ",".join(interests),
+        "location.address": location,
+        "sort_by": "date",
+        "expand": "venue",
+    }
+    response = requests.get(url, headers=headers, params=params)
+    if response.status_code != 200:
+        print(f"Error: {response.status_code} - {response.text}")
+        return []
+    data = response.json()
+    events = []
+    for event in data.get("events", []):
+        event_info = {
+            "name": event["name"]["text"],
+            "description": event["description"]["text"],
+            "start_time": event["start"]["local"],
+            "end_time": event["end"]["local"],
+            "url": event["url"],
+            "venue": event["venue"]["name"],
+            "address": event["venue"]["address"]["localized_address_display"],
+        }
+        events.append(event_info)
+    return events
+
+def chat_with_agent(prompt):
+    openai.api_key = openai_api_key
+    response = openai.ChatCompletion.create(
+        model="gpt-4",
+        messages=[
+            {"role": "system", "content": "You are an AI event concierge."},
+            {"role": "user", "content": prompt}
+        ],
+    )
+    return response.choices[0].message["content"]
+
+if __name__ == "__main__":
+    user_input = "Find events related to technology and music in Grand Rapids, MI."
+    agent_response = chat_with_agent(user_input)
+    print(agent_response)
+
+    events = get_events_from_eventbrite(location, interests)
+    for event in events:
+        print(f"Name: {event['name']}")
+        print(f"Description: {event['description']}")
+        print(f"Start Time: {event['start_time']}")
+        print(f"End Time: {event['end_time']}")
+        print(f"URL: {event['url']}")
+        print(f"Venue: {event['venue']}")
+        print(f"Address: {event['address']}\n")
+import os
+import json
+from dotenv import load_dotenv
+import requests
+import openai
+
 # Load environment variables
 load_dotenv()
 
